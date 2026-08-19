@@ -4,7 +4,7 @@
 
 One migration. Two independent agents. A coordination layer that decides who gets to touch it, and when.
 
-A real feature (API rate-limiting plus an admin metrics endpoint) built on a real existing codebase, governed end-to-end by Okto Nexus.
+A real feature (a rate-limit tracking table plus an admin endpoint that reports it) built on a real existing codebase, governed end-to-end by Okto Nexus.
 
 [About Okto Nexus](#about-okto-nexus) · [The Problem](#the-problem) · [How It Works](#how-it-works) · [Nexus in Action](#nexus-in-action) · [Architecture](#architecture) · [Repository Structure](#repository-structure) · [Workspace & Demo Data](#workspace--demo-data) · [Roles](#roles) · [Tools Used](#tools-used) · [Prerequisites](#prerequisites) · [Quickstart](#quickstart) · [Running the Target App](#running-the-target-app-app) · [Handoff Stages](#handoff-stages) · [Where to Find Artifacts](#where-to-find-artifacts) · [Contributing & Licensing](#contributing--licensing) · [Conclusion](#conclusion)
 
@@ -31,7 +31,14 @@ Nexus is built with handoffs, approval policies, and a dependency graph specific
 
 ## How It Works
 
-This repo adds rate-limiting to an existing backend API, plus an admin endpoint that reports rate-limit metrics, using two independent AI agents connected to the same Nexus workspace: **Schema Agent** (proposes and applies the database migration) and **API Agent** (builds the admin endpoint, dependent on the migration existing).
+**The feature, concretely.** The target app (`app/`) is a fork of the RealWorld demo blogging API — users, articles, comments, tags, nothing more. This repo adds exactly two pieces of work on top of it:
+
+- **A new `RateLimitEvent` table** (one Prisma migration) that records, per request, which endpoint was hit, from which IP, and by which user (or `null` for anonymous). Nothing writes to it automatically yet — it's a tracking table, not enforcement middleware. No request actually gets blocked in this demo.
+- **One new endpoint, `GET /api/admin/metrics`**, that reads that table for the last 60 seconds and reports how many hits each endpoint got, split into authenticated vs. anonymous, flagged `exceeded: true` past a hardcoded threshold (100 authenticated / 20 anonymous). It's a reporting endpoint, not a limiter.
+
+That's it — that's the whole feature. It was picked deliberately small and deliberately *split into two dependent pieces* (a schema change, then an endpoint that can't work without it) because that shape is exactly what's needed to exercise Nexus's approval gate and dependency graph. The feature itself isn't the point of this repo; the coordination around building it is. If you came here expecting a real production rate limiter, that's not what this is.
+
+Two independent AI agents connected to the same Nexus workspace build these two pieces: **Schema Agent** (proposes and applies the migration) and **API Agent** (builds the admin endpoint, dependent on the migration existing).
 
 1. **Schema Agent proposes, but is intercepted.** It calls `handoff_create` with the migration SQL in the description. An operator has attached a `require_approval` policy to Schema Agent's `handoff_create` calls, so this doesn't create the handoff — Nexus parks it in the approvals queue instead. The agent never chooses to "ask for approval"; it just tries to act, and Nexus decides to hold it.
 2. **A human approves it.** The pending proposal sits in the dashboard with the full SQL and Schema Agent's reasoning visible. Approval re-executes the original call — the handoff now exists, `OPEN`, claimable.
