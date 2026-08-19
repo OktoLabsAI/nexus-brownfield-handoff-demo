@@ -18,14 +18,16 @@ Independent of Okto Pulse — no shared code, config, or service. Pulse is just 
 
 ## The Problem
 
-Four failure modes this repo tests directly, not just describes:
+Running more than one AI agent against the same codebase surfaces the same four failure modes every time — not because the agents are bad, but because nothing in a chat session was ever designed to coordinate with another chat session. This repo tests each one directly, not just describes it:
 
-- **Two agents can claim the same task** → duplicate, conflicting work.
-- **Risky actions ship because nobody asked** → no audit trail beyond "the agent decided to."
-- **A dependency nobody enforces is a suggestion** → agents build against schemas that don't exist yet.
-- **Coordination context dies with the session** → the next agent starts from zero.
+| Failure mode | Where it shows up here | Why it happens |
+|---|---|---|
+| Two agents claim the same task | Both Schema Agent and API Agent are eligible to claim the migration handoff | No atomic single-winner rule — two agents polling for work will occasionally grab the same item at the same instant, and both proceed believing they own it |
+| Risky actions ship because nobody asked | Schema Agent's migration touches a live database | An agent that can act, will act — nothing pauses it for a human unless something structurally sits in the way; "the agent decided to" ends up being the entire audit trail |
+| A dependency nobody enforces is a suggestion | API Agent building the admin endpoint before `RateLimitEvent` exists | A comment or a task description saying "do this after that" is just text — it doesn't stop an agent that's ready to work from building against a table that isn't there yet |
+| Coordination context dies with the session | API Agent's session gets killed mid-build (stage 7) | A chat transcript isn't durable storage — kill the process and every decision, claim, and piece of in-progress state made inside it is gone with it |
 
-Nexus's handoffs, approval policies, and dependency graph exist to close these gaps.
+Nexus's handoffs, approval policies, and dependency graph exist specifically to close these four gaps — structurally, not by asking agents to remember a rule.
 
 ## How It Works
 
