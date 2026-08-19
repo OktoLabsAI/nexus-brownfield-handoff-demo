@@ -26,3 +26,5 @@ __pycache__/
 *.db-wal
 *.db-shm
 *.db-journal
+*.serve.lock
+*.lock
