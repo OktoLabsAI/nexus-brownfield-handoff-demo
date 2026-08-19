@@ -8,13 +8,14 @@ never "asks for approval"; it just tries to create the handoff, and Nexus
 decides to hold it. The response comes back as a pending_approval envelope
 instead of a created handoff.
 
-IMPORTANT -- target scoping: this is deliberately created with an
-unrestricted target (no `target` filter) so that BOTH schema-agent and
-api-agent are eligible claimants once it's approved. In the original run of
-this demo, the migration handoff was scoped to `target: {strategy: role,
-role: api}`, which meant only api-agent could ever claim it -- collapsing
-the claim race in stage 3 to a single eligible agent. Leaving target unset
-here is what makes 05_claim_race.py an actual race.
+IMPORTANT -- target scoping: `target` is a required field on `handoff_create`
+(confirmed against the real tool schema) -- there's no "leave it unset"
+option. This deliberately uses `{"strategy": "broadcast"}` so BOTH
+schema-agent and api-agent are eligible claimants once it's approved. In the
+original run of this demo, the migration handoff was scoped to
+`target: {strategy: role, role: api}`, which meant only api-agent could ever
+claim it -- collapsing the claim race in stage 3 to a single eligible agent.
+`broadcast` is what makes 05_claim_race.py an actual race.
 
 Usage:
     python3 scripts/03_schema_agent_propose.py
@@ -66,7 +67,8 @@ async def main() -> None:
                     "so this belongs in Postgres, not in-memory.\n\n"
                     "-- migration.sql --\n" + MIGRATION_SQL
                 ),
-                # No `target` -- deliberately unrestricted, see module docstring.
+                "target": {"strategy": "broadcast"},
+                "visibility": "public",
             },
         )
         print(json.dumps(result, indent=2))

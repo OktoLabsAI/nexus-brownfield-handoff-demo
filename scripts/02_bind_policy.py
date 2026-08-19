@@ -66,16 +66,11 @@ def main() -> None:
         print("   bound.")
 
         print("\n== Verifying ==")
-        try:
-            resp = client.get(f"/api/v1/agents/{args.agent_id}/policies")
-            resp.raise_for_status()
-            print(resp.json())
-        except httpx.HTTPStatusError:
-            print(
-                "   (verification GET path may differ by Nexus version -- "
-                f"check the dashboard's agent detail page for {args.agent_id}, "
-                "or /api/v1/docs on your instance, if this 404s)"
-            )
+        # Confirmed live -- GET /api/v1/agents/{id}/policies returns the
+        # bound globals/inline policies for that agent.
+        resp = client.get(f"/api/v1/agents/{args.agent_id}/policies")
+        resp.raise_for_status()
+        print(resp.json())
 
 
 if __name__ == "__main__":

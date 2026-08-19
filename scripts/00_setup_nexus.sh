@@ -13,13 +13,19 @@ PROJECT_ROOT="${NEXUS_PROJECT_ROOT:?Set NEXUS_PROJECT_ROOT to the absolute path 
 echo "== Installing okto-nexus (serve extra) =="
 pip install "okto-nexus[serve]"
 
-echo "== Starting okto-nexus serve on port ${PORT} =="
-echo "   (this runs in the foreground -- open a second terminal for the rest of the setup,"
-echo "    or background it yourself with '... &' / nohup / a process manager)"
+echo "== Starting okto-nexus serve on port ${PORT} (backgrounded) =="
+# --home scopes this instance's data to the repo clone itself
+# (.nexus-data/, gitignored) instead of the default ~/.okto_nexus, which is
+# SHARED across every Nexus instance on this machine. Without this, running
+# this script on a machine that already has another Nexus demo/workspace
+# set up mixes this demo's agents and handoffs into that shared data --
+# confirmed the hard way while validating these scripts against a machine
+# that already had an unrelated Nexus instance running.
 nohup okto-nexus serve --port "${PORT}" --project-root "${PROJECT_ROOT}" \
+  --home "${PROJECT_ROOT}/.nexus-data" \
   > "${PROJECT_ROOT}/.nexus-server.log" 2>&1 &
 NEXUS_PID=$!
-echo "   started pid ${NEXUS_PID}, logging to .nexus-server.log"
+echo "   started pid ${NEXUS_PID}, data in .nexus-data/, logging to .nexus-server.log"
 
 echo "== Waiting for it to come up =="
 for i in $(seq 1 30); do

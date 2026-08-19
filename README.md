@@ -189,28 +189,46 @@ Full stage-by-stage run: **[`docs/walkthrough.md`](docs/walkthrough.md)**.
 
 ---
 
-## Results (from a prior full run)
+## Results
 
-The scenario has been run end to end against a live Nexus instance before this scaffold existed. Real artifacts produced then:
+Two separate live runs back this repo:
 
-- **Migration:** a new `RateLimitEvent` Prisma model plus its generated `migration.sql`, added to `app/src/prisma/`
-- **Admin endpoint:** `GET /api/admin/metrics` (`app/src/app/routes/admin/admin.controller.ts`), registered in the app's router, following the existing auth and route conventions
+**Run 1 — the original feature build.** Produced the real code sitting in `app/` right now:
+
+- **Migration:** the `RateLimitEvent` Prisma model plus its generated `migration.sql`, in `app/src/prisma/`
+- **Admin endpoint:** `GET /api/admin/metrics` (`app/src/app/routes/admin/admin.controller.ts`), registered in the app's router
 - **Tests:** `admin.metrics.spec.ts`
-- **Close-out numbers:**
+
+That run's claim race was accidentally uncontested (see "A note on the claim race" above), and its coordination steps were driven by hand, not by the scripts in this repo — those didn't exist yet.
+
+**Run 2 — validating this repo's scripts, end to end, against a fresh isolated Nexus instance and a fresh Postgres database** (no docker on the machine that validated this, so a native Postgres install stood in for `docker-compose.yml`'s container — same effect, different transport). Every stage in the table above was executed for real via the actual `scripts/*.py` files, not simulated:
 
 ```json
 {
-  "handoffs_created": 4,
-  "handoffs_claimed": 4,
-  "handoffs_completed": 4,
-  "rejection_count": 0,
-  "avg_time_to_approval_seconds": 117.99
+  "handoffs_created": 2,
+  "handoffs_claimed": 2,
+  "handoffs_completed": 2,
+  "claim_latency_seconds": [7.05, 12.61],
+  "avg_claim_latency_seconds": 9.83,
+  "time_to_approval_seconds": [31.49],
+  "rejection_count": 0
 }
 ```
 
-`rejection_count: 0` there because that run's claim race was accidentally uncontested (see "A note on the claim race" above) — not because rejection doesn't work. `scripts/05_claim_race.py` in this repo fixes that; re-running it should produce a genuine `rejected` outcome for the losing agent.
+The claim race in this run **was** genuinely contested — `schema-agent` and `api-agent` both called `handoff_claim` concurrently on a `broadcast`-target handoff, `schema-agent` won, `api-agent` got a real `HANDOFF_ALREADY_CLAIMED` response. `rejection_count: 0` isn't a miss here, though: a losing race attempt returns an error to the caller but doesn't emit a `handoff.rejected` *event* on the handoff — that event type is for something else (an explicit reject action), not a lost race. `docs/prompts/closeout.py` counts events, so a race with a real loser still correctly reports `0` there; don't read that field as "no contention happened."
 
-Dependency enforcement (`DEPENDENCY_NOT_MET`) and session-kill recovery were both exercised live and behaved as designed.
+Dependency enforcement (`DEPENDENCY_NOT_MET`) fired exactly as designed on the early claim attempt, and recovery was proven by handing a `CLAIMED` handoff to a brand-new script invocation with no shared memory, which reconstructed full state via `handoff_get` + `event_get` before completing it.
+
+### What running it for real actually caught
+
+Every one of these was invisible from reading the scripts — each only surfaced by executing them against a live server:
+
+- `handoff_create` names its caller field `from_agent_id`, not `agent_id` like every other handoff tool — confirmed by pulling the real tool schema via `list_tools()`, not guessed.
+- `target` and `visibility` are **required** on `handoff_create` (no "unrestricted" default) — the "broadcast" strategy is what actually makes the claim race real.
+- `artifact_put` takes `artifact_type` (`"text"`/`"file"`/`"json"`/`"markdown"`), not the `content_type` I'd invented.
+- The very first handoff/event call against a workspace Nexus hasn't seen before fails with a cryptic `DB_ERROR: FOREIGN KEY constraint failed` unless `workspace_resolve` has been called first. Now baked into `scripts/lib/nexus_client.py` so every script does this automatically.
+- Nexus reports application-level failures (a lost claim race, a denied dependency) as a normal successful MCP response whose JSON body is `{"ok": false, ...}` — not as an MCP-protocol error. The client originally only checked the protocol-level error flag, which meant a **losing** claim-race attempt was silently logged as a win. Fixed in `nexus_client.py`; this is the one that would have made the demo's own headline claim (single-winner races) look true when it wasn't actually being checked correctly.
+- `scripts/00_setup_nexus.sh` now passes `--home` to scope this demo's data to the repo clone — the default `~/.okto_nexus` is shared across every Nexus instance on a machine, which would otherwise mix this demo's agents into an unrelated one's data.
 
 ### A finding worth repeating
 

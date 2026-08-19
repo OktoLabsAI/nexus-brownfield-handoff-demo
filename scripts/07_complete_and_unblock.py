@@ -53,7 +53,7 @@ async def main() -> None:
             artifact = await agent.call(
                 session,
                 "artifact_put",
-                {"key": "migration.sql", "content": sql, "content_type": "text/plain"},
+                {"artifact_type": "text", "name": "migration.sql", "content": sql},
             )
             print("== artifact_put ==")
             print(json.dumps(artifact, indent=2))

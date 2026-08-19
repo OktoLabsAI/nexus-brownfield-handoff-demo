@@ -65,15 +65,19 @@ async def cmd_recover(handoff_id: str, result: str) -> None:
             page = await agent.call(
                 session,
                 "event_get",
-                {"stream": "handoff", "cursor": cursor, "limit": 100},
+                {
+                    "stream": "handoff",
+                    "cursor": cursor,
+                    "limit": 100,
+                    "filters": {"handoff_id": handoff_id},
+                },
             )
             data = page.get("data", page)
             events.extend(data.get("events", []))
             if not data.get("has_more"):
                 break
             cursor = data.get("next_cursor")
-        relevant = [e for e in events if e.get("handoff_id") == handoff_id or e.get("payload", {}).get("handoff_id") == handoff_id]
-        print(json.dumps(relevant, indent=2))
+        print(json.dumps(events, indent=2))
 
         print(f"\n== finishing the task for real, then handoff_complete ==")
         completed = await agent.call(

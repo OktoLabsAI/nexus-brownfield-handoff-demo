@@ -43,6 +43,8 @@ async def cmd_create(migration_handoff_id: str) -> None:
                     "blocked counts. Depends on the RateLimitEvent table existing, "
                     "so this can't be claimed until the migration handoff completes."
                 ),
+                "target": {"strategy": "role", "role": "api"},
+                "visibility": "public",
                 "depends_on": [migration_handoff_id],
             },
         )

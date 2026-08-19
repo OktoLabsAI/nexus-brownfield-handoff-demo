@@ -65,19 +65,42 @@ class NexusAgent:
         async with streamablehttp_client(self.mcp_url) as (read, write, _):
             async with ClientSession(read, write) as session:
                 await session.initialize()
+                # Found the hard way: skip this and the FIRST handoff/event
+                # call against a workspace Nexus hasn't seen before fails
+                # with a cryptic `DB_ERROR: FOREIGN KEY constraint failed`
+                # instead of a clear message. `workspace_resolve` creates the
+                # workspace row if it doesn't exist yet; it's idempotent, so
+                # calling it every session is cheap and removes the failure
+                # mode entirely rather than just documenting it.
+                await session.call_tool("workspace_resolve", {"project_root": self.project_root})
                 yield session
 
     async def call(self, session: ClientSession, tool: str, arguments: dict) -> dict:
         """Call an MCP tool with project_root/agent_id auto-filled, parse the
-        JSON result, and raise if the call itself errored."""
-        payload = {"project_root": self.project_root, "agent_id": self.agent_id, **arguments}
+        JSON result, and raise if the call itself errored.
+
+        `handoff_create` is the one tool that names the caller field
+        `from_agent_id` instead of `agent_id` -- confirmed against the real
+        tool schema via `list_tools()`, not assumed. Every other handoff/event
+        tool uses `agent_id`.
+        """
+        id_field = "from_agent_id" if tool == "handoff_create" else "agent_id"
+        payload = {"project_root": self.project_root, id_field: self.agent_id, **arguments}
         result = await session.call_tool(tool, payload)
         text = result.content[0].text if result.content else "{}"
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
             data = {"raw": text}
-        if getattr(result, "isError", False):
+        # Two distinct failure shapes, both need to raise:
+        #  - MCP transport/protocol errors set result.isError (schema
+        #    validation failures, etc.)
+        #  - Nexus's own application errors come back as a normal successful
+        #    MCP response whose JSON body is {"ok": false, "error": {...}}
+        #    -- confirmed live: a losing handoff_claim in a race returns this
+        #    shape, not an MCP-level error, so checking isError alone let a
+        #    rejected claim get mistaken for a successful one.
+        if getattr(result, "isError", False) or data.get("ok") is False:
             raise RuntimeError(f"{tool} failed: {data}")
         return data
 
