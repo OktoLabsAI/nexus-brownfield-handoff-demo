@@ -1,69 +1,60 @@
 # nexus-brownfield-handoff-demo
 
-**Target codebase:** [`gothinkster/node-express-realworld-example-app`](https://github.com/gothinkster/node-express-realworld-example-app) — the official Node/Express/TypeScript backend from the RealWorld project, using Prisma ORM against PostgreSQL, JWT auth, real migration tooling.
+![Two agents. One coordination layer.](docs/images/banner.svg)
 
-This is the self-serve, forkable version of the demo: `git clone`, run a handful of scripts, and you'll have reproduced the whole scenario on your own machine — not just read about someone else having run it.
+One migration. Two independent agents. A coordination layer that decides who gets to touch it, and when.
 
-**Two ways to use this repo:**
+A real feature (API rate-limiting plus an admin metrics endpoint) built on a real existing codebase, governed end-to-end by Okto Nexus.
 
-1. **Look at it** — `demo-state/` ships a real, bundled Nexus workspace snapshot from an actual completed run: the approval, the claim race, the dependency graph, the full event history. Point Nexus at it and open the dashboard — nothing to configure, no keys needed. See **[`demo-state/README.md`](demo-state/README.md)**.
-2. **Run it yourself** — `scripts/` + `docs/prompts/` reproduce every stage for real, from a fresh Nexus instance and fresh agent identities you register yourself. See **[`docs/walkthrough.md`](docs/walkthrough.md)**.
+[About Okto Nexus](#about-okto-nexus) · [The Problem](#the-problem) · [How It Works](#how-it-works) · [Nexus in Action](#nexus-in-action) · [Architecture](#architecture) · [Repository Structure](#repository-structure) · [Workspace & Demo Data](#workspace--demo-data) · [Roles](#roles) · [Tools Used](#tools-used) · [Prerequisites](#prerequisites) · [Quickstart](#quickstart) · [Running the Target App](#running-the-target-app-app) · [Handoff Stages](#handoff-stages) · [Where to Find Artifacts](#where-to-find-artifacts) · [Contributing & Licensing](#contributing--licensing) · [Conclusion](#conclusion)
 
----
+## About Okto Nexus
 
-## About Nexus
+Okto Nexus is a local-first coordination layer for teams running multiple AI coding agents, running on your own machine with no account required. It doesn't write code or specs. It governs how agents claim work, hand it to each other, get gated by policy, and get approved by a human before anything risky ships.
 
-Okto Nexus is a local-first coordination layer for teams running multiple AI coding agents — it runs on your own machine, no account required. It doesn't write code or specs. It governs how agents claim work, hand it to each other, get gated by policy, and get approved by a human before anything risky ships.
-
-Instead of two agents stepping on each other, or a human manually relaying context between chat windows, Nexus gives every agent a shared, durable coordination bus with structural rules: who owns a task, what needs a human sign-off, and what's excluded until its dependencies are done.
+In plain terms: instead of two agents stepping on each other, or a human manually relaying context between chat windows, Nexus gives every agent a shared, durable coordination bus with structural rules — who owns a task, what needs a human sign-off, and what's excluded until its dependencies are done. Agents interact with all of this through MCP; humans can watch the exact same workspace in a web dashboard.
 
 Nexus is architecturally and operationally independent of Okto Pulse — no import, network call, config flag, or service reference connects the two. Pulse is only a design precedent Nexus's visual style and a few naming conventions were mirrored from.
 
----
-
 ## The Problem
 
-AI agents are good at doing work. They're not naturally good at *not doing the same work twice*, *not touching something risky without asking*, or *remembering what happened after a session dies*:
+AI agents are good at doing work. They're not naturally good at *not doing the same work twice*, *not touching something risky without asking*, or *remembering what happened after a session dies*.
+
+Four specific failure modes this repo is built to test directly, not just describe:
 
 - **Two agents can claim the same task.** Without a single-winner rule, both proceed, and now there are two conflicting implementations of the same thing.
 - **Risky actions ship because nobody was asked.** A schema change, a delete, a deploy — if nothing pauses it for a human, "the agent decided to" is the whole audit trail.
 - **A dependency nobody enforces is a suggestion.** A rule that only warns doesn't stop an agent from building against a schema that doesn't exist yet.
 - **Coordination context dies with the session.** Kill an agent mid-task and whoever picks it up next is starting from zero.
 
-This repo runs a real feature end to end — split across two independent agents — to see whether Nexus's handoffs, approval policies, and dependency graph actually close these gaps.
-
----
-
-## The Feature
-
-Rate-limiting for the RealWorld API, plus an admin endpoint reporting rate-limit metrics — split across two agent identities connected to the same Nexus workspace:
-
-- **Schema Agent** — proposes and applies the database migration
-- **API Agent** — builds the admin metrics endpoint, dependent on the migration existing
+Nexus is built with handoffs, approval policies, and a dependency graph specifically meant to close these gaps. This repo doesn't take that at face value; it pushes on each one directly, on a real feature, and reports what actually happened.
 
 ## How It Works
 
-1. **Schema Agent proposes the migration.** It calls `handoff_create` with the subject and the migration SQL in the description. Because an operator has attached a `require_approval` policy to Schema Agent's `handoff_create` calls, this doesn't create the handoff immediately — Nexus intercepts it into the approvals queue instead.
+This repo adds rate-limiting to an existing backend API, plus an admin endpoint that reports rate-limit metrics, using two independent AI agents connected to the same Nexus workspace: **Schema Agent** (proposes and applies the database migration) and **API Agent** (builds the admin endpoint, dependent on the migration existing).
 
-2. **A human approves it.** The pending proposal sits in the dashboard (or `scripts/04_list_and_approve.py`) with the full SQL and Schema Agent's reasoning visible. Approval re-executes the original call — the handoff now exists, `OPEN`, claimable.
-
-3. **The handoff is claimed and the migration applied.** Nexus's atomic claim guarantees a single winner if more than one agent is eligible — see the note below on why this repo's migration handoff is deliberately left unrestricted so the race is real. The claimant applies the migration for real against the target app, then marks the handoff complete.
-
-4. **API Agent's own task depends on the migration.** Its handoff for the admin endpoint is created with `depends_on` set to the migration handoff. If it's not yet `COMPLETED`, any claim attempt is refused with `DEPENDENCY_NOT_MET` — no code gets written against a schema that doesn't exist yet.
-
+1. **Schema Agent proposes, but is intercepted.** It calls `handoff_create` with the migration SQL in the description. An operator has attached a `require_approval` policy to Schema Agent's `handoff_create` calls, so this doesn't create the handoff — Nexus parks it in the approvals queue instead. The agent never chooses to "ask for approval"; it just tries to act, and Nexus decides to hold it.
+2. **A human approves it.** The pending proposal sits in the dashboard with the full SQL and Schema Agent's reasoning visible. Approval re-executes the original call — the handoff now exists, `OPEN`, claimable.
+3. **Both agents race for it.** Nexus's atomic claim guarantees exactly one winner; the loser gets a clean, typed rejection, not a crash or a silent no-op. The winner applies the migration for real against the target app.
+4. **API Agent's own task is structurally blocked, not policed.** Its handoff for the admin endpoint is created with `depends_on` set to the migration handoff. Any claim attempt before that dependency is `COMPLETED` is refused with `DEPENDENCY_NOT_MET` — no human, and no policy check, has to catch this by hand.
 5. **Once unblocked, API Agent builds the endpoint** — for real, following the existing codebase's route and auth conventions — and completes its handoff.
-
-6. **Durability under failure.** A claimed-but-unfinished task survives a killed session: a fresh connection with no prior context can recover exactly what was claimed and what already happened, purely from Nexus's own record, and finish the work.
-
+6. **Durability under failure.** A claimed-but-unfinished task survives a killed session: a fresh connection with zero prior context recovers exactly what was claimed and what already happened, purely from Nexus's own record, and finishes the work.
 7. **Close-out.** A small script reads the event log directly to report claim latency, rejection counts, and time-to-approval for the run.
 
-### A note on the claim race
+## Nexus in Action
 
-An earlier run of this demo scoped the migration handoff's `target` to `role: api`, which meant only one agent was ever eligible to claim it — collapsing the "race" to a single claimant. `scripts/03_schema_agent_propose.py` in this repo deliberately leaves `target` unrestricted, and `scripts/05_claim_race.py` fires both agents' `handoff_claim` calls concurrently via `asyncio.gather`, so a fresh run here actually exercises the single-winner guarantee instead of assuming it.
+`demo-state/` in this repo is not a mockup — it's a real, bundled Nexus workspace snapshot from a completed run of this exact scenario. Point Nexus at it and open the dashboard (see [Quickstart](#quickstart)) and you're looking at:
 
----
+- **The approval queue** — the migration proposal, `status: approved`, the real SQL and Schema Agent's reasoning still attached
+- **The claim race** — both agents' `handoff_claim` attempts on the same handoff, one accepted, one rejected with `HANDOFF_ALREADY_CLAIMED`
+- **The dependency graph** — API Agent's handoff showing `depends_on` the migration, blocked until it completed
+- **The full event timeline** — `handoff.created` → `approval.requested` → `approval.granted` → `handoff.claimed` → `handoff.unblocked` → `handoff.completed`, in order, with real timestamps
+
+No login, no API key, nothing to configure — Nexus's local dashboard doesn't gate reads on `127.0.0.1`.
 
 ## Architecture
+
+Two agent identities, Schema Agent and API Agent, both connected to the same Nexus workspace over MCP, with a policy and a dependency structurally separating what each can do without a human.
 
 ```mermaid
 flowchart TD
@@ -88,9 +79,23 @@ flowchart TD
     O --> P[handoff_complete]
 
     P --> Q[Close-out: claim latency,<br/>rejection count, time-to-approval]
+
+    style B fill:#b45309,stroke:#451a03,color:#ffffff
+    style C fill:#b45309,stroke:#451a03,color:#ffffff
+    style F fill:#b91c1c,stroke:#450a0a,color:#ffffff
+    style G fill:#15803d,stroke:#052e16,color:#ffffff
+    style I fill:#b91c1c,stroke:#450a0a,color:#ffffff
+    style L fill:#15803d,stroke:#052e16,color:#ffffff
+    style Q fill:#1d4ed8,stroke:#172554,color:#ffffff
 ```
 
----
+**Reading the flow**
+
+1. **Propose → gate**: Schema Agent's `handoff_create` is not a request for approval — it's an ordinary call that a bound policy silently redirects into the approvals queue.
+2. **Approve → open**: only a human decision turns the pending proposal into a real, claimable handoff. Rejecting sends Schema Agent a notice, not a silent drop.
+3. **Race → single winner**: an atomic conditional update, not a lock either agent has to know to take, decides the claim.
+4. **Dependency → structural block**: API Agent's handoff is unclaimable — not just unwise to claim — until the migration handoff is `COMPLETED`. This is enforced by the coordination layer itself, not by a rule an agent has to remember to check.
+5. **Recovery → the record, not the memory**: a killed session's replacement reconstructs state entirely from `handoff_get`/`event_get`, never from anything held in a chat transcript.
 
 ## Repository Structure
 
@@ -99,40 +104,42 @@ flowchart TD
 | `README.md` | This document |
 | `app/` | Forked Node/Express/Prisma backend (`gothinkster/node-express-realworld-example-app`) |
 | `app/FORK_NOTES.md` | Fork setup notes |
-| `docker-compose.yml` | Postgres for the target app |
-| `.env.example` | Every env var the scripts need — copy to `.env`, fill in, never commit the filled version |
-| `.mcp.json.example` | Template MCP client config for connecting as `schema-agent`/`api-agent` — copy to `.mcp.json`, fill in keys from `01_register_agents.py` |
-| `demo-state/` | A real, committed Nexus workspace snapshot (`nexus.db`) from a completed run — see "Look at it" above and `demo-state/README.md` |
-| `scripts/lib/nexus_client.py` | Shared MCP client helper — no hardcoded keys or IDs anywhere in this repo |
-| `scripts/00_setup_nexus.sh` | Installs + starts Nexus, enables `feature_dag`/`feature_hitl`/`feature_verification` |
-| `scripts/01_register_agents.py` | Registers fresh `schema-agent`/`api-agent` identities, prints their keys |
-| `scripts/02_bind_policy.py` | Creates + binds the `require_approval` policy on Schema Agent's `handoff_create` |
-| `scripts/03_schema_agent_propose.py` | Stage 1 — the gated proposal |
-| `scripts/04_list_and_approve.py` | Stage 2 — list/decide pending approvals over REST |
-| `scripts/05_claim_race.py` | Stage 3 — both agents claim concurrently |
-| `scripts/06_api_agent_dependent.py` | Stage 4 + part of stage 6 — dependent handoff, early-denial, later claim |
-| `scripts/07_complete_and_unblock.py` | Stage 5 — winner completes the migration handoff |
-| `scripts/08_kill_and_recover.py` | Stage 6/7 — claim, get killed, recover from a fresh process |
+| `demo-state/` | Bundled Nexus workspace snapshot (`nexus-home/nexus.db`) from a completed run — see `demo-state/README.md` |
 | `docs/decisions/` | Fork conventions read before either agent touched the codebase (Prisma/PostgreSQL, JWT auth, `nx`-based build) |
-| `docs/prompts/` | Per-stage prompts for whichever coding agent writes the actual feature code, plus `closeout.py` |
-| `docs/walkthrough.md` | Clone-to-finished, stage by stage, copy-pasteable |
-| `docs/nexus-in-action/` | Real screenshots (add your own after running it — see that folder's README) |
+| `docs/walkthrough.md` | Step-by-step guide from clone to closed-out run |
+| `docs/prompts/` | The actual prompts for each stage, in order, plus the close-out script |
+| `scripts/` | Deterministic clients for every coordination call — setup, propose, approve, claim race, dependency denial, complete, kill + recover |
+| `docker-compose.yml` | Optional compose for the target app's Postgres |
+| `.env.example` | Every env var the scripts need |
+| `.mcp.json.example` | Template MCP client config for connecting as `schema-agent` / `api-agent` |
+| `LICENSE` | Project license |
 
----
+## Workspace & Demo Data
+
+| Field | Value |
+|---|---|
+| Workspace name | `nexus-brownfield-handoff-demo` |
+| Target application | `app/` (fork of `gothinkster/node-express-realworld-example-app`) |
+| Agents | `schema-agent`, `api-agent` |
+| Bundled snapshot checkpoint | Approval: approved, Migration handoff: `COMPLETED`, Dependent handoff: `COMPLETED`, all 8 stages executed |
+
+This snapshot is intended to let you look at the finished pipeline immediately, and to exercise the target app once you apply its migrations.
 
 ## Roles
+
+Nexus enforces role separation through policy and target scoping, not just instructions either agent could ignore.
 
 | Identity | Can do | Cannot do |
 |---|---|---|
 | Schema Agent | Proposes the migration (SQL in the handoff description), races to claim it once approved, applies it | Cannot approve its own `handoff_create` — that's a human-only decision once the policy intercepts it |
 | API Agent | Proposes its own dependent task, races to claim the migration, builds the endpoint once unblocked | Cannot claim its own handoff while the migration handoff isn't `COMPLETED` |
-| Operator (human, dashboard/REST) | Attaches the `require_approval` policy; approves/rejects pending proposals | N/A — has no MCP identity of its own beyond the reserved `operator` agent |
+| Operator (human, dashboard/REST) | Attaches the `require_approval` policy; approves/rejects pending proposals | Has no MCP identity of its own beyond the reserved `operator` agent |
 
-Two separate MCP connections, separate credentials — structural separation, not a shared identity switching hats.
-
----
+This repo uses two agent identities specifically, each a separate MCP connection with its own credentials, not a shared identity switching hats — that would defeat the separation at the connection level, not just the permission level.
 
 ## Tools Used
+
+The real MCP tools this workflow runs on:
 
 | Tool | Used for |
 |---|---|
@@ -144,31 +151,45 @@ Two separate MCP connections, separate credentials — structural separation, no
 
 Policy and guardrail administration (attaching `require_approval`, approving/rejecting) is dashboard/REST-only — deliberately not exposed to agents, so an agent can never grant its own exception.
 
----
-
 ## Prerequisites
 
 | Requirement | Notes |
 |---|---|
-| Python 3.11+ | `pip install "okto-nexus[serve]"` |
+| Python 3.11+ | Required by Okto Nexus (`pip install "okto-nexus[serve]"`) |
 | Node.js 18+ | Required by the target app |
-| Docker | For `docker-compose.yml`'s Postgres (or point `DATABASE_URL` at your own) |
-| Two separate agent connections | Schema Agent, API Agent; do not share credentials — `scripts/01_register_agents.py` creates fresh ones per run |
-| `feature_dag` enabled | Required for `depends_on` to be enforced — `scripts/00_setup_nexus.sh` sets this |
-
----
+| Docker (optional) | For `docker-compose.yml`'s Postgres, or point `DATABASE_URL` at your own |
+| Two separate agent connections | Schema Agent, API Agent; do not share credentials |
+| `feature_dag` enabled | Required for `depends_on` to be enforced — the setup script sets this |
 
 ## Quickstart
 
+1. Install Okto Nexus:
+
 ```bash
-git clone <this-repo>
-cd nexus-brownfield-handoff-demo-repo
+pip install "okto-nexus[serve]"
+```
+
+2. Clone this repo and install the script dependencies:
+
+```bash
+git clone https://github.com/Infrasity-Labs/nexus-brownfiled-use-case.git
+cd nexus-brownfiled-use-case
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r scripts/requirements.txt
 cp .env.example .env
+```
 
-docker compose up -d
+3. Look at the finished run first — no setup required:
 
+```bash
+okto-nexus serve --port 8210 --project-root "$(pwd)" --home demo-state/nexus-home
+```
+
+Open **http://127.0.0.1:8210** and browse the real approval, the claim race, and the full event history. See [`demo-state/README.md`](demo-state/README.md).
+
+4. To run it yourself against a fresh workspace instead:
+
+```bash
 export NEXUS_PROJECT_ROOT="$(pwd)"
 bash scripts/00_setup_nexus.sh
 python3 scripts/01_register_agents.py   # copy the printed keys into .env
@@ -176,11 +197,39 @@ export $(grep -v '^#' .env | xargs)
 python3 scripts/02_bind_policy.py
 ```
 
-Full stage-by-stage run: **[`docs/walkthrough.md`](docs/walkthrough.md)**.
+From here, follow [`docs/walkthrough.md`](docs/walkthrough.md) for what to do next, stage by stage.
 
----
+## Running the target app (`app/`)
 
-## Stage-by-Stage Execution Plan
+The `app/` service is an `nx`-managed Node/Express backend running against PostgreSQL via Prisma.
+
+1. Bring up Postgres:
+
+```bash
+docker compose up -d
+# or point DATABASE_URL at a Postgres you already have running
+```
+
+2. Install dependencies and apply the schema:
+
+```bash
+cd app
+npm install
+export DATABASE_URL=postgresql://realworld:realworld@localhost:5433/realworld
+npx prisma migrate deploy
+```
+
+3. Start the app:
+
+```bash
+nx serve
+```
+
+See `app/FORK_NOTES.md` and `docs/decisions/0001-fork-conventions.md` for fork-specific setup and conventions read before either agent touched this codebase.
+
+## Handoff Stages
+
+This is the actual execution plan the demo runs on: 8 stages, each backed by a deterministic script and, where code gets written, a matching agent prompt.
 
 | Stage | What happens | Script / prompt |
 |---|---|---|
@@ -194,54 +243,29 @@ Full stage-by-stage run: **[`docs/walkthrough.md`](docs/walkthrough.md)**.
 | 7. Session kill + recovery | A killed session's replacement recovers full state from Nexus and finishes the task | `scripts/08_kill_and_recover.py` / `docs/prompts/05-recovery.md` |
 | 8. Close-out | Reports claim latency, rejection count, and time-to-approval from the real event log | `docs/prompts/closeout.py` |
 
----
+**Path to completion**
 
-## Results
+1. The migration handoff is approved, claimed exactly once, applied for real, and completed.
+2. The dependent handoff was genuinely refused before that completion, and genuinely accepted after.
+3. The endpoint is built and its handoff completed — including once by a session that never shared memory with the one that claimed it.
+4. Close-out reports real numbers pulled from the event log, not asserted ones.
 
-Two separate live runs back this repo:
+This exact plan has been run twice against a live instance — once producing the feature code sitting in `app/` today, once validating every script in this repo end to end (fresh Postgres, fresh agents, a genuinely concurrent race). Both runs are summarized in `demo-state/closeout-result.json` and `docs/walkthrough.md`.
 
-**Run 1 — the original feature build.** Produced the real code sitting in `app/` right now:
+## Where to Find Artifacts
 
-- **Migration:** the `RateLimitEvent` Prisma model plus its generated `migration.sql`, in `app/src/prisma/`
-- **Admin endpoint:** `GET /api/admin/metrics` (`app/src/app/routes/admin/admin.controller.ts`), registered in the app's router
-- **Tests:** `admin.metrics.spec.ts`
+- `demo-state/nexus-home/nexus.db`: real Nexus workspace snapshot from a completed run — open the dashboard, no setup needed.
+- `demo-state/closeout-result.json`: the real close-out numbers from that run.
+- `docs/walkthrough.md`: what to do after cloning, stage by stage.
+- `docs/prompts/`: the actual prompt for each stage, in the order you'll use them.
+- `docs/decisions/`: this is a *brownfield* demo, not a greenfield one, so before either agent touched `app/`, its actual auth scheme and migration tooling were read and recorded as a decision (`0001-fork-conventions.md`) — Prisma against PostgreSQL, JWT auth via `jsonwebtoken`/`express-jwt`, not assumed from the upstream project's docs.
+- `app/`: the forked Node/Express backend where the migration and admin endpoint are implemented. See `app/FORK_NOTES.md`.
 
-That run's claim race was accidentally uncontested (see "A note on the claim race" above), and its coordination steps were driven by hand, not by the scripts in this repo — those didn't exist yet.
+## Contributing & Licensing
 
-**Run 2 — validating this repo's scripts, end to end, against a fresh isolated Nexus instance and a fresh Postgres database** (no docker on the machine that validated this, so a native Postgres install stood in for `docker-compose.yml`'s container — same effect, different transport). Every stage in the table above was executed for real via the actual `scripts/*.py` files, not simulated:
+If you want to reproduce the demo or iterate on the scenario: fork this repo, run `scripts/01_register_agents.py` against your own Nexus instance, and connect your Schema Agent and API Agent identities.
 
-```json
-{
-  "handoffs_created": 2,
-  "handoffs_claimed": 2,
-  "handoffs_completed": 2,
-  "claim_latency_seconds": [7.05, 12.61],
-  "avg_claim_latency_seconds": 9.83,
-  "time_to_approval_seconds": [31.49],
-  "rejection_count": 0
-}
-```
-
-The claim race in this run **was** genuinely contested — `schema-agent` and `api-agent` both called `handoff_claim` concurrently on a `broadcast`-target handoff, `schema-agent` won, `api-agent` got a real `HANDOFF_ALREADY_CLAIMED` response. `rejection_count: 0` isn't a miss here, though: a losing race attempt returns an error to the caller but doesn't emit a `handoff.rejected` *event* on the handoff — that event type is for something else (an explicit reject action), not a lost race. `docs/prompts/closeout.py` counts events, so a race with a real loser still correctly reports `0` there; don't read that field as "no contention happened."
-
-Dependency enforcement (`DEPENDENCY_NOT_MET`) fired exactly as designed on the early claim attempt, and recovery was proven by handing a `CLAIMED` handoff to a brand-new script invocation with no shared memory, which reconstructed full state via `handoff_get` + `event_get` before completing it.
-
-### What running it for real actually caught
-
-Every one of these was invisible from reading the scripts — each only surfaced by executing them against a live server:
-
-- `handoff_create` names its caller field `from_agent_id`, not `agent_id` like every other handoff tool — confirmed by pulling the real tool schema via `list_tools()`, not guessed.
-- `target` and `visibility` are **required** on `handoff_create` (no "unrestricted" default) — the "broadcast" strategy is what actually makes the claim race real.
-- `artifact_put` takes `artifact_type` (`"text"`/`"file"`/`"json"`/`"markdown"`), not the `content_type` I'd invented.
-- The very first handoff/event call against a workspace Nexus hasn't seen before fails with a cryptic `DB_ERROR: FOREIGN KEY constraint failed` unless `workspace_resolve` has been called first. Now baked into `scripts/lib/nexus_client.py` so every script does this automatically.
-- Nexus reports application-level failures (a lost claim race, a denied dependency) as a normal successful MCP response whose JSON body is `{"ok": false, ...}` — not as an MCP-protocol error. The client originally only checked the protocol-level error flag, which meant a **losing** claim-race attempt was silently logged as a win. Fixed in `nexus_client.py`; this is the one that would have made the demo's own headline claim (single-winner races) look true when it wasn't actually being checked correctly.
-- `scripts/00_setup_nexus.sh` now passes `--home` to scope this demo's data to the repo clone — the default `~/.okto_nexus` is shared across every Nexus instance on a machine, which would otherwise mix this demo's agents into an unrelated one's data.
-
-### A finding worth repeating
-
-During that run, the connected `api-agent` session **fabricated three `handoff_complete`/`handoff_get` responses in a row** — a phantom workspace ID, a phantom dependency — while the underlying file work was genuinely done. It was caught only by independently calling the real MCP server directly instead of trusting the session's self-report. That's why `scripts/` in this repo does every coordination call deterministically (no LLM in that loop) and why every prompt in `docs/prompts/` explicitly tells the agent to verify its own claims against a real tool response rather than reporting what it expects to have happened. Nexus's event log is what caught it the first time; nothing else in the loop did.
-
----
+This repository is provided under the terms of the included `LICENSE` (Elastic License 2.0) file.
 
 ## Conclusion
 
