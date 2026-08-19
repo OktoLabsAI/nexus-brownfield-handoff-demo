@@ -118,7 +118,7 @@ flowchart TD
 
 | Field | Value |
 |---|---|
-| Workspace name | `nexus-brownfield-handoff-demo` |
+| Repo / demo name | `nexus-brownfield-handoff-demo` (informal — Nexus workspaces are identified by the hashed `project_root` path, not a configured display name) |
 | Target application | `app/` (fork of `gothinkster/node-express-realworld-example-app`) |
 | Agents | `schema-agent`, `api-agent` |
 | Bundled snapshot checkpoint | Approval: approved, Migration handoff: `COMPLETED`, Dependent handoff: `COMPLETED`, all 8 stages executed |
@@ -222,7 +222,8 @@ npx prisma migrate deploy
 3. Start the app:
 
 ```bash
-nx serve
+npm start   # runs "nx serve" via the local node_modules/.bin -- a bare
+            # `nx serve` fails unless you have nx installed globally
 ```
 
 See `app/FORK_NOTES.md` and `docs/decisions/0001-fork-conventions.md` for fork-specific setup and conventions read before either agent touched this codebase.
