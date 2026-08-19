@@ -27,11 +27,14 @@ cp .env.example .env
 docker compose up -d
 cd app
 npm install
-cp .env.example .env 2>/dev/null || true   # if app/ has its own env example; otherwise set DATABASE_URL directly
 export DATABASE_URL=postgresql://realworld:realworld@localhost:5433/realworld
 npx prisma migrate deploy   # applies the base RealWorld schema, before either agent's change
 cd ..
 ```
+
+`app/` has no `.env.example` of its own -- it reads `DATABASE_URL` straight
+from the environment (see `app/src/prisma/schema.prisma`'s `datasource`
+block), so exporting it as above is enough.
 
 ## 2. Bring up Nexus and register the two agent identities
 

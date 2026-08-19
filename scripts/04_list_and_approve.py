@@ -22,13 +22,24 @@ Confirmed live: `GET /api/v1/approvals?workspace=<id>` lists pending items;
 `POST /api/v1/approvals/{id}/decision` with `{"decision": "approve"|"reject"}`
 decides one. Get `<workspace_id>` from `GET /api/v1/workspaces` or the
 dashboard URL.
+
+Auth: if OPERATOR_API_KEY is set in your environment, it's sent as a Bearer
+token -- see 01_register_agents.py's docstring for why this isn't assumed
+unnecessary just because the instance these scripts were built against
+didn't require it.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 
 import httpx
+
+
+def _auth_headers() -> dict:
+    key = os.environ.get("OPERATOR_API_KEY")
+    return {"Authorization": f"Bearer {key}"} if key else {}
 
 
 def main() -> None:
@@ -40,7 +51,7 @@ def main() -> None:
     parser.add_argument("--note", default=None)
     args = parser.parse_args()
 
-    with httpx.Client(base_url=args.url, timeout=10) as client:
+    with httpx.Client(base_url=args.url, timeout=10, headers=_auth_headers()) as client:
         if args.approval_id and args.decision:
             payload = {"decision": args.decision}
             if args.note:

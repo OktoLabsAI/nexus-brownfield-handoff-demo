@@ -7,14 +7,25 @@ accepts `handoff_create` / `message_create` as its action -- NOT
 `artifact_put` -- which is why the gate in this demo sits on Schema Agent
 proposing the migration handoff, not on any later artifact write.
 
+Auth: if OPERATOR_API_KEY is set in your environment, it's sent as a Bearer
+token -- see 01_register_agents.py's docstring for why this isn't assumed
+unnecessary just because the instance these scripts were built against
+didn't require it.
+
 Usage:
     python3 scripts/02_bind_policy.py --url http://127.0.0.1:8202
 """
 from __future__ import annotations
 
 import argparse
+import os
 
 import httpx
+
+
+def _auth_headers() -> dict:
+    key = os.environ.get("OPERATOR_API_KEY")
+    return {"Authorization": f"Bearer {key}"} if key else {}
 
 
 def main() -> None:
@@ -23,7 +34,7 @@ def main() -> None:
     parser.add_argument("--agent-id", default="schema-agent")
     args = parser.parse_args()
 
-    with httpx.Client(base_url=args.url, timeout=10) as client:
+    with httpx.Client(base_url=args.url, timeout=10, headers=_auth_headers()) as client:
         print("== Creating policy header ==")
         resp = client.post(
             "/api/v1/policies",
