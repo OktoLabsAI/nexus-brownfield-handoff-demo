@@ -43,14 +43,14 @@ This repo adds rate-limiting to an existing backend API, plus an admin endpoint 
 
 ## Nexus in Action
 
-`demo-state/` in this repo is not a mockup — it's a real, bundled Nexus workspace snapshot from a completed run of this exact scenario. Point Nexus at it and open the dashboard (see [Quickstart](#quickstart)) and you're looking at:
+`demo-state/` in this repo is not a mockup — it's a real, bundled Nexus workspace snapshot from a completed run of this exact scenario. It's looking at:
 
 - **The approval queue** — the migration proposal, `status: approved`, the real SQL and Schema Agent's reasoning still attached
 - **The claim race** — both agents' `handoff_claim` attempts on the same handoff, one accepted, one rejected with `HANDOFF_ALREADY_CLAIMED`
 - **The dependency graph** — API Agent's handoff showing `depends_on` the migration, blocked until it completed
 - **The full event timeline** — `handoff.created` → `approval.requested` → `approval.granted` → `handoff.claimed` → `handoff.unblocked` → `handoff.completed`, in order, with real timestamps
 
-No login, no API key, nothing to configure — Nexus's local dashboard doesn't gate reads on `127.0.0.1`.
+See [`demo-state/README.md`](demo-state/README.md) for how to point a local Nexus instance at it — no login or API key required, Nexus's local dashboard doesn't gate reads on `127.0.0.1`.
 
 ## Architecture
 
@@ -179,15 +179,7 @@ pip install -r scripts/requirements.txt
 cp .env.example .env
 ```
 
-3. Look at the finished run first — no setup required:
-
-```bash
-okto-nexus serve --port 8210 --project-root "$(pwd)" --home demo-state/nexus-home
-```
-
-Open **http://127.0.0.1:8210** and browse the real approval, the claim race, and the full event history. See [`demo-state/README.md`](demo-state/README.md).
-
-4. To run it yourself against a fresh workspace instead:
+3. Set up and run it:
 
 ```bash
 export NEXUS_PROJECT_ROOT="$(pwd)"
@@ -197,7 +189,7 @@ export $(grep -v '^#' .env | xargs)
 python3 scripts/02_bind_policy.py
 ```
 
-From here, follow [`docs/walkthrough.md`](docs/walkthrough.md) for what to do next, stage by stage.
+From here, follow [`docs/walkthrough.md`](docs/walkthrough.md) for what to do next, stage by stage. If you'd rather look at a completed run before setting anything up, see [`demo-state/README.md`](demo-state/README.md).
 
 ## Running the target app (`app/`)
 
