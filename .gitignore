@@ -1,6 +1,8 @@
 .env
 .env.*
 !.env.example
+.mcp.json
+!.mcp.json.example
 *.local.md
 *.local.json
 
@@ -11,7 +13,16 @@ tmp/
 
 .nexus-venv/
 .nexus-data/
+.venv-verify/
+.venv-seed/
 
 __pycache__/
 *.pyc
 .venv/
+
+# demo-state/nexus-home/ is a deliberately-committed snapshot -- do NOT
+# gitignore it. Only ignore SQLite's transient WAL/lock siblings, which
+# shouldn't be committed even for demo-state.
+*.db-wal
+*.db-shm
+*.db-journal

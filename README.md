@@ -4,6 +4,11 @@
 
 This is the self-serve, forkable version of the demo: `git clone`, run a handful of scripts, and you'll have reproduced the whole scenario on your own machine — not just read about someone else having run it.
 
+**Two ways to use this repo:**
+
+1. **Look at it** — `demo-state/` ships a real, bundled Nexus workspace snapshot from an actual completed run: the approval, the claim race, the dependency graph, the full event history. Point Nexus at it and open the dashboard — nothing to configure, no keys needed. See **[`demo-state/README.md`](demo-state/README.md)**.
+2. **Run it yourself** — `scripts/` + `docs/prompts/` reproduce every stage for real, from a fresh Nexus instance and fresh agent identities you register yourself. See **[`docs/walkthrough.md`](docs/walkthrough.md)**.
+
 ---
 
 ## About Nexus
@@ -96,6 +101,8 @@ flowchart TD
 | `app/FORK_NOTES.md` | Fork setup notes |
 | `docker-compose.yml` | Postgres for the target app |
 | `.env.example` | Every env var the scripts need — copy to `.env`, fill in, never commit the filled version |
+| `.mcp.json.example` | Template MCP client config for connecting as `schema-agent`/`api-agent` — copy to `.mcp.json`, fill in keys from `01_register_agents.py` |
+| `demo-state/` | A real, committed Nexus workspace snapshot (`nexus.db`) from a completed run — see "Look at it" above and `demo-state/README.md` |
 | `scripts/lib/nexus_client.py` | Shared MCP client helper — no hardcoded keys or IDs anywhere in this repo |
 | `scripts/00_setup_nexus.sh` | Installs + starts Nexus, enables `feature_dag`/`feature_hitl`/`feature_verification` |
 | `scripts/01_register_agents.py` | Registers fresh `schema-agent`/`api-agent` identities, prints their keys |

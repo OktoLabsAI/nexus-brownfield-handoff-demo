@@ -30,25 +30,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from lib.nexus_client import NexusAgent  # noqa: E402
 
-MIGRATION_SQL = """\
--- AlterTable / CreateTable, following this fork's Prisma migration style
--- (see docs/decisions/0001-fork-conventions.md). Generate the real version
--- with `npx prisma migrate dev --name add_rate_limit_event` inside app/ --
--- this literal is what goes in the handoff description for the approval
--- queue to show a human, not a substitute for actually running prisma.
-CREATE TABLE "RateLimitEvent" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT,
-    "route" TEXT NOT NULL,
-    "windowStart" TIMESTAMP(3) NOT NULL,
-    "requestCount" INTEGER NOT NULL DEFAULT 1,
-    "blocked" BOOLEAN NOT NULL DEFAULT false,
-    CONSTRAINT "RateLimitEvent_pkey" PRIMARY KEY ("id")
-);
-
-ALTER TABLE "RateLimitEvent" ADD CONSTRAINT "RateLimitEvent_userId_fkey"
-    FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-"""
+# This is the actual migration already sitting in
+# app/src/prisma/migrations/20260817131700_add_rate_limit_event/migration.sql
+# -- kept identical here on purpose. The approval queue is supposed to show a
+# human the real SQL that's about to run; an earlier draft of this script had
+# a placeholder table shape here that didn't match the file actually applied,
+# which would have made the "human reviews the real SQL" story a lie.
+MIGRATION_SQL = (
+    Path(__file__).parent.parent
+    / "app/src/prisma/migrations/20260817131700_add_rate_limit_event/migration.sql"
+).read_text()
 
 
 async def main() -> None:
