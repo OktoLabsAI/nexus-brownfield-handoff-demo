@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+*.local.md
+*.local.json
+
+node_modules/
+dist/
+tmp/
+.nx/
+
+.nexus-venv/
+.nexus-data/
+
+__pycache__/
+*.pyc
+.venv/
