@@ -250,7 +250,7 @@ This is the actual execution plan the demo runs on: 8 stages, each backed by a d
 3. The endpoint is built and its handoff completed — including once by a session that never shared memory with the one that claimed it.
 4. Close-out reports real numbers pulled from the event log, not asserted ones.
 
-This exact plan has been run twice against a live instance — once producing the feature code sitting in `app/` today, once validating every script in this repo end to end (fresh Postgres, fresh agents, a genuinely concurrent race). Both runs are summarized in `demo-state/closeout-result.json` and `docs/walkthrough.md`.
+This exact plan has been run against a live instance, end to end, with both agents genuinely racing for the migration claim via concurrent `handoff_claim` calls — fresh Postgres, fresh agents, no simulation. The real numbers from that run are in `demo-state/closeout-result.json`, and the run itself is what `demo-state/` bundles.
 
 ## Where to Find Artifacts
 

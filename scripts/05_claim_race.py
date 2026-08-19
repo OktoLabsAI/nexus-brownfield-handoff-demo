@@ -7,10 +7,10 @@ race against Nexus's atomic conditional UPDATE, not two calls that happen to
 run one after the other. Nexus guarantees exactly one winner; the loser gets
 a clean, typed rejection (not a crash, not a silent no-op).
 
-This only produces a genuine race if the migration handoff has no `target`
-restriction (see 03_schema_agent_propose.py's docstring) -- if it's scoped
-to one role, there's only one eligible claimant and this script will just
-show that agent winning uncontested.
+Both schema-agent and api-agent are eligible claimants here because
+03_schema_agent_propose.py creates the handoff with a `broadcast` target --
+that's what makes this a genuine race between the two of them rather than a
+claim by whichever one happens to be allowed to try.
 
 Usage:
     python3 scripts/05_claim_race.py --handoff-id hof_...

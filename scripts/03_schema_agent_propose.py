@@ -10,12 +10,10 @@ instead of a created handoff.
 
 IMPORTANT -- target scoping: `target` is a required field on `handoff_create`
 (confirmed against the real tool schema) -- there's no "leave it unset"
-option. This deliberately uses `{"strategy": "broadcast"}` so BOTH
-schema-agent and api-agent are eligible claimants once it's approved. In the
-original run of this demo, the migration handoff was scoped to
-`target: {strategy: role, role: api}`, which meant only api-agent could ever
-claim it -- collapsing the claim race in stage 3 to a single eligible agent.
-`broadcast` is what makes 05_claim_race.py an actual race.
+option. This uses `{"strategy": "broadcast"}` so BOTH schema-agent and
+api-agent are eligible claimants once it's approved -- that's what makes
+05_claim_race.py in the next stage an actual, concurrent race between the
+two of them, not a claim by whichever one happens to be eligible.
 
 Usage:
     python3 scripts/03_schema_agent_propose.py
