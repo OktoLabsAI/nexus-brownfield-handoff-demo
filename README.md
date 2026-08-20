@@ -256,7 +256,6 @@ Run end to end against a live instance, both agents genuinely racing - real numb
 
 To reproduce or iterate: fork this repo, run `scripts/01_register_agents.py` against your own Nexus instance, connect your own Schema Agent and API Agent.
 
-Provided under the included `LICENSE` (Elastic License 2.0).
 
 ## Conclusion
 
