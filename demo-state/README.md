@@ -1,7 +1,7 @@
-# Quick look — see the finished run without doing anything
+# Quick look - see the finished run without doing anything
 
 This directory is a real, bundled snapshot of a Nexus workspace after every
-stage in the main README's table actually ran — the gated proposal, the
+stage in the main README's table actually ran - the gated proposal, the
 human approval, a genuinely concurrent claim race, the dependency denial,
 the completed migration, the recovered session, all of it. Point Nexus at
 it and open the dashboard; you're looking at the real history, not a mockup.
@@ -15,7 +15,7 @@ okto-nexus serve --port 8210 \
   --home demo-state/nexus-home
 ```
 
-Open **http://127.0.0.1:8210** in a browser. No login, no API key — Nexus's
+Open **http://127.0.0.1:8210** in a browser. No login, no API key - Nexus's
 local dashboard/REST surface doesn't require one on `127.0.0.1`. You should
 see:
 
@@ -26,11 +26,11 @@ see:
   loser's `HANDOFF_ALREADY_CLAIMED` outcome in the event history
 - The dependency graph showing the second handoff was blocked until the
   first completed
-- Full event timeline — `handoff.created` → `approval.requested` →
+- Full event timeline - `handoff.created` → `approval.requested` →
   `approval.granted` → `handoff.claimed` → `handoff.unblocked` → `handoff.completed`
 
 `closeout-result.json` in this folder is the real close-out numbers from
-this exact run (claim latency, time-to-approval), for reference —
+this exact run (claim latency, time-to-approval), for reference -
 `docs/prompts/closeout.py` regenerates the same shape from whatever's live.
 
 Port `8210` here is deliberately different from `scripts/00_setup_nexus.sh`'s
@@ -41,12 +41,12 @@ collision.
 ## What this ISN'T for
 
 This bundled `nexus.db` has two agent identities with real API keys already
-issued to them — but Nexus never stores plaintext keys, only their hashes,
+issued to them - but Nexus never stores plaintext keys, only their hashes,
 so there's no key here for anyone (including us) to hand you back. That's
 deliberate, not an oversight: baking a working credential into a public repo
 is a bad idea even when, as here, it would only ever unlock a disposable
-local SQLite file. If you want to actually **act** as an agent — call
-`handoff_claim`, drive the scenario further, connect an MCP client — use the
+local SQLite file. If you want to actually **act** as an agent - call
+`handoff_claim`, drive the scenario further, connect an MCP client - use the
 "Run it yourself" flow in the main README instead: it registers brand-new
 agent identities on a fresh instance and gives you keys nobody else has ever
 seen. `.mcp.json.example` at the repo root shows the config shape once you
@@ -54,7 +54,7 @@ have those.
 
 ## Seeing real data in the admin endpoint
 
-`GET /api/admin/metrics` only reports activity from the last 60 seconds —
+`GET /api/admin/metrics` only reports activity from the last 60 seconds -
 see the comment in `admin.controller.ts`. A static data dump would always be
 stale by the time you restored it, so instead:
 

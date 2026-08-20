@@ -1,4 +1,4 @@
-# Walkthrough — clone to finished
+# Walkthrough - clone to finished
 
 End-to-end steps to run this demo on your own machine. Every coordination
 call is a script in `scripts/`; every code-writing step has a matching
@@ -10,7 +10,7 @@ any code getting written.
 
 - Python 3.11+
 - Node.js 18+
-- Docker (for the target app's Postgres) — or your own Postgres if you'd
+- Docker (for the target app's Postgres) - or your own Postgres if you'd
   rather skip `docker-compose.yml`
 
 ```bash
@@ -55,7 +55,7 @@ python3 scripts/02_bind_policy.py
 Confirm the policy bound correctly (the script prints a verification call;
 if it 404s, check the dashboard's agent detail page instead).
 
-## 3. Stage 1 — propose the migration (gated)
+## 3. Stage 1 - propose the migration (gated)
 
 Either run the script directly:
 
@@ -67,7 +67,7 @@ or hand `docs/prompts/01-schema-agent-propose.md` to a coding agent
 connected as `schema-agent`. Either way, expect a `pending_approval`
 response, not a created handoff.
 
-## 4. Stage 2 — approve it
+## 4. Stage 2 - approve it
 
 ```bash
 # find your workspace_id
@@ -79,10 +79,10 @@ python3 scripts/04_list_and_approve.py --workspace <workspace_id> \
   --approval-id apr_... --decision approve --note "SQL looks right"
 ```
 
-(Or use the dashboard's approvals queue — same effect.) The migration
+(Or use the dashboard's approvals queue - same effect.) The migration
 handoff should now be `OPEN`. Note its `handoff_id`.
 
-## 5. Stage 3 — the claim race
+## 5. Stage 3 - the claim race
 
 ```bash
 python3 scripts/05_claim_race.py --handoff-id <migration_handoff_id>
@@ -91,20 +91,20 @@ python3 scripts/05_claim_race.py --handoff-id <migration_handoff_id>
 Expect exactly one `claimed` and one `rejected` in the output. Note which
 agent won.
 
-## 6. Stage 4 — API Agent's dependent task, denied early
+## 6. Stage 4 - API Agent's dependent task, denied early
 
 ```bash
 python3 scripts/06_api_agent_dependent.py create --migration-handoff-id <migration_handoff_id>
 ```
 
 Expect a `DEPENDENCY_NOT_MET`-style denial on the immediate claim attempt.
-Note the printed `handoff_id` for API Agent's own task — you'll need it in
+Note the printed `handoff_id` for API Agent's own task - you'll need it in
 step 8.
 
-## 7. Stage 5 — apply the migration for real, complete the handoff
+## 7. Stage 5 - apply the migration for real, complete the handoff
 
 Hand `docs/prompts/02-schema-agent-apply-migration.md` to whichever agent
-won the race in step 5 (check the winner from that step's output — it's not
+won the race in step 5 (check the winner from that step's output - it's not
 necessarily Schema Agent). It'll run `prisma migrate dev` for real and then
 either call `handoff_complete` itself or you can finish with:
 
@@ -114,7 +114,7 @@ python3 scripts/07_complete_and_unblock.py --winner <schema|api> \
   --result "Applied RateLimitEvent migration; see app/src/prisma/migrations/<ts>_add_rate_limit_event/migration.sql"
 ```
 
-## 8. Stage 6 — unblock and build
+## 8. Stage 6 - unblock and build
 
 ```bash
 python3 scripts/06_api_agent_dependent.py claim --handoff-id <api_agent_handoff_id>
@@ -123,7 +123,7 @@ python3 scripts/06_api_agent_dependent.py claim --handoff-id <api_agent_handoff_
 Should now succeed. Then hand `docs/prompts/04-api-agent-build-endpoint.md`
 to API Agent to actually write `admin.controller.ts` and its test.
 
-## 9. Stage 7 — kill and recover
+## 9. Stage 7 - kill and recover
 
 ```bash
 python3 scripts/08_kill_and_recover.py start --handoff-id <some_handoff_id>
@@ -137,7 +137,7 @@ python3 scripts/08_kill_and_recover.py recover --handoff-id <some_handoff_id> \
 Or drive this through two separate agent sessions using
 `docs/prompts/05-recovery.md` for the second one.
 
-## 10. Stage 8 — close out
+## 10. Stage 8 - close out
 
 ```bash
 python3 docs/prompts/closeout.py --api-key "$API_API_KEY" --project-root "$NEXUS_PROJECT_ROOT"
@@ -151,8 +151,8 @@ real event log.
 At every "have an agent do X" step above, the corresponding prompt tells the
 agent to verify its own coordination claims against real tool responses
 rather than reporting what it expects to have happened. This isn't
-boilerplate caution — a prior run of this exact demo caught an agent session
+boilerplate caution - a prior run of this exact demo caught an agent session
 fabricating three `handoff_complete`/`handoff_get` responses in a row while
 the underlying file work was genuinely done. If something in your run looks
-too clean, don't take the agent's word for it — call `handoff_get`/
+too clean, don't take the agent's word for it - call `handoff_get`/
 `event_get` yourself and check.

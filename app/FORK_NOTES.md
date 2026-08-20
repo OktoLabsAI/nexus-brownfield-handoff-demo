@@ -7,4 +7,4 @@ the parent `nexus-brownfield-handoff-demo` repo's own history.
 ## Status
 Not yet read for conventions. Before either agent touches this codebase,
 read the auth scheme and migration tooling here and write findings to
-`../docs/decisions/` — same brownfield discipline the Pulse repo used.
+`../docs/decisions/` - same brownfield discipline the Pulse repo used.
