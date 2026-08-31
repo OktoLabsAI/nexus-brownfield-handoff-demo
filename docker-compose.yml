@@ -1,0 +1,31 @@
+# Brings up only the target app's database. Nexus itself is NOT containerized
+# here on purpose -- it's a local install the two agent identities connect to
+# over MCP (see scripts/00_setup_nexus.sh), and running it inside compose
+# would obscure the "runs on your own machine" story this demo is making.
+#
+# Usage:
+#   docker compose up -d
+#   cd app && npx prisma migrate deploy   # apply the base RealWorld schema
+#
+# Exposed on 5433 (not the default 5432) so this doesn't collide with a
+# Postgres you may already have running locally.
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: nexus-brownfield-demo-postgres
+    environment:
+      POSTGRES_USER: realworld
+      POSTGRES_PASSWORD: realworld
+      POSTGRES_DB: realworld
+    ports:
+      - "5433:5432"
+    volumes:
+      - nexus-brownfield-demo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U realworld"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  nexus-brownfield-demo-pgdata:

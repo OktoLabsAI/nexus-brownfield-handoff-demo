@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy to .mcp.json (gitignored) and fill in the two api_key values after running scripts/01_register_agents.py against your own fresh instance -- see the main README's 'Run it yourself' flow. Do not fill this in against demo-state/'s bundled nexus.db; those keys were never recoverable in plaintext by design, see demo-state/README.md.",
+  "mcpServers": {
+    "nexus-schema-agent": {
+      "type": "http",
+      "url": "http://127.0.0.1:8202/mcp?api_key=<schema-agent-key-from-01_register_agents.py>"
+    },
+    "nexus-api-agent": {
+      "type": "http",
+      "url": "http://127.0.0.1:8202/mcp?api_key=<api-agent-key-from-01_register_agents.py>"
+    }
+  }
+}

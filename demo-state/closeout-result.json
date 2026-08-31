@@ -1,0 +1,16 @@
+{
+  "handoffs_created": 2,
+  "handoffs_claimed": 2,
+  "handoffs_rejected": 0,
+  "handoffs_completed": 2,
+  "claim_latency_seconds": [
+    4.886602,
+    11.973833
+  ],
+  "avg_claim_latency_seconds": 8.430217500000001,
+  "time_to_approval_seconds": [
+    6.537452
+  ],
+  "avg_time_to_approval_seconds": 6.537452,
+  "rejection_count": 0
+}
