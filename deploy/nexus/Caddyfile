@@ -1,0 +1,30 @@
+# Nexus has its own operator sign-in (dashboard) and per-agent API keys (MCP and REST),
+# so this proxy adds no auth. It only bridges two checks that assume Nexus is reached
+# directly, because Nexus ignores X-Forwarded-* headers:
+#
+# 1. Sign-in compares the browser Origin with the scheme Nexus sees (http behind a TLS
+#    edge). An Origin that is exactly https://<this host> is rewritten to http://<this host>.
+#    Any other Origin is left alone and is still rejected.
+# 2. MCP only accepts loopback and local machine names as Host (DNS-rebinding guard), so
+#    /mcp is sent with the loopback Host. Agent keys still authenticate every MCP call.
+#    Nexus also redirects /mcp to /mcp/ using that Host, so /mcp is rewritten here instead.
+{
+	admin off
+	auto_https off
+}
+
+:{$PORT} {
+	@https_same_origin header Origin https://{host}
+	request_header @https_same_origin Origin http://{host}
+
+	@mcp_exact path /mcp
+	rewrite @mcp_exact /mcp/
+	@mcp path /mcp /mcp/*
+	reverse_proxy @mcp 127.0.0.1:8202 {
+		header_up Host 127.0.0.1:8202
+		flush_interval -1
+	}
+	reverse_proxy 127.0.0.1:8202 {
+		flush_interval -1
+	}
+}
